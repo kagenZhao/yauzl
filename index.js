@@ -138,7 +138,7 @@ function fromRandomAccessReader(reader, totalSize, options, callback) {
                                   : eocdrBuffer.slice(22);
 
       if (!(entryCount === 0xffff || centralDirectoryOffset === 0xffffffff)) {
-        return callback(null, new ZipFile(reader, centralDirectoryOffset, totalSize, entryCount, comment, options.autoClose, options.lazyEntries, decodeStrings, options.validateEntrySizes, options.strictFileNames));
+        return callback(null, new ZipFile(reader, centralDirectoryOffset, totalSize, entryCount, comment, options.autoClose, options.lazyEntries, decodeStrings, options.validateEntrySizes, options.strictFileNames, options.isUTF8fileName));
       }
 
       // ZIP64 format
@@ -179,7 +179,7 @@ function fromRandomAccessReader(reader, totalSize, options, callback) {
           // 48 - offset of start of central directory with respect to the starting disk number     8 bytes
           centralDirectoryOffset = readUInt64LE(zip64EocdrBuffer, 48);
           // 56 - zip64 extensible data sector                                (variable size)
-          return callback(null, new ZipFile(reader, centralDirectoryOffset, totalSize, entryCount, comment, options.autoClose, options.lazyEntries, decodeStrings, options.validateEntrySizes, options.strictFileNames));
+          return callback(null, new ZipFile(reader, centralDirectoryOffset, totalSize, entryCount, comment, options.autoClose, options.lazyEntries, decodeStrings, options.validateEntrySizes, options.strictFileNames, options.isUTF8fileName));
         });
       });
       return;
@@ -189,7 +189,7 @@ function fromRandomAccessReader(reader, totalSize, options, callback) {
 }
 
 util.inherits(ZipFile, EventEmitter);
-function ZipFile(reader, centralDirectoryOffset, fileSize, entryCount, comment, autoClose, lazyEntries, decodeStrings, validateEntrySizes, strictFileNames) {
+function ZipFile(reader, centralDirectoryOffset, fileSize, entryCount, comment, autoClose, lazyEntries, decodeStrings, validateEntrySizes, strictFileNames, isUTF8fileName) {
   var self = this;
   EventEmitter.call(self);
   self.reader = reader;
@@ -213,6 +213,7 @@ function ZipFile(reader, centralDirectoryOffset, fileSize, entryCount, comment, 
   self.strictFileNames = !!strictFileNames;
   self.isOpen = true;
   self.emittedError = false;
+  self.isUTF8fileName = isUTF8fileName;
 
   if (!self.lazyEntries) self._readEntry();
 }
@@ -298,7 +299,7 @@ ZipFile.prototype._readEntry = function() {
       if (self.emittedError) return;
       // 46 - File name
       var isUtf8 = (entry.generalPurposeBitFlag & 0x800) !== 0;
-      entry.fileName = self.decodeStrings ? decodeBuffer(buffer, 0, entry.fileNameLength, isUtf8)
+      entry.fileName = self.decodeStrings ? decodeBuffer(buffer, 0, entry.fileNameLength, self.isUTF8fileName || isUtf8)
                                           : buffer.slice(0, entry.fileNameLength);
 
       // 46+n - Extra field
